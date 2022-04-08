@@ -30,7 +30,7 @@ class ModelWithTemperature(nn.Module):
         return logits / temperature
 
     # This function probably should live outside of this class, but whatever
-    def get_temperature(self, logits, labels):
+    def get_temperature(self, logits, labels, logger=None):
         """
         Tune the tempearature of the model (using the validation set).
         We're going to set it to optimize NLL.
@@ -43,7 +43,8 @@ class ModelWithTemperature(nn.Module):
         # Calculate NLL and ECE before temperature scaling
         before_temperature_nll = nll_criterion(logits, labels).item()
         before_temperature_ece = ece_criterion(logits, labels).item()
-        print('Before temperature - NLL: %.3f, ECE: %.3f' % (before_temperature_nll, before_temperature_ece))
+        if logger:
+            logger.info('Before temperature - NLL: %.3f, ECE: %.3f' % (before_temperature_nll, before_temperature_ece))
 
         # Next: optimize the temperature w.r.t. NLL
         optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=50)
@@ -58,8 +59,9 @@ class ModelWithTemperature(nn.Module):
         # Calculate NLL and ECE after temperature scaling
         after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
         after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
-        print('Optimal temperature: %.3f' % self.temperature.item())
-        print('After temperature - NLL: %.3f, ECE: %.3f' % (after_temperature_nll, after_temperature_ece))
+        if logger:
+            logger.info('Optimal temperature: %.3f' % self.temperature.item())
+            logger.info('After temperature - NLL: %.3f, ECE: %.3f' % (after_temperature_nll, after_temperature_ece))
 
         return self.temperature.unsqueeze(1).expand(logits.size(0), logits.size(1)).to(self.device)
 
