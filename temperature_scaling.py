@@ -30,20 +30,25 @@ class ModelWithTemperature(nn.Module):
         return logits / temperature
 
     # This function probably should live outside of this class, but whatever
-    def get_temperature(self, logits, labels, logger=None):
+    def get_temperature(self, logits, labels, logits_are_probabilities=False, logger=None):
         """
         Tune the tempearature of the model (using the validation set).
         We're going to set it to optimize NLL.
         valid_loader (DataLoader): validation set loader
         """
         # self.to(self.device)
-        nll_criterion = nn.CrossEntropyLoss().to(self.device)
-        ece_criterion = _ECELoss().to(self.device)
+
+        if logits_are_probabilities:
+            nll_criterion = nn.NLLLoss().to(self.device)
+            ece_criterion = _ECELoss(logits_are_probabilities=logits_are_probabilities).to(self.device)
+        else:
+            nll_criterion = nn.CrossEntropyLoss().to(self.device)
+            ece_criterion = _ECELoss().to(self.device)
 
         # Calculate NLL and ECE before temperature scaling
         before_temperature_nll = nll_criterion(logits, labels).item()
         before_temperature_ece = ece_criterion(logits, labels).item()
-        if logger:
+        if logger is not None:
             logger.info('Before temperature - NLL: %.3f, ECE: %.3f' % (before_temperature_nll, before_temperature_ece))
 
         # Next: optimize the temperature w.r.t. NLL
@@ -59,7 +64,7 @@ class ModelWithTemperature(nn.Module):
         # Calculate NLL and ECE after temperature scaling
         after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
         after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
-        if logger:
+        if logger is not None:
             logger.info('Optimal temperature: %.3f' % self.temperature.item())
             logger.info('After temperature - NLL: %.3f, ECE: %.3f' % (after_temperature_nll, after_temperature_ece))
 
@@ -85,7 +90,7 @@ class _ECELoss(nn.Module):
     "Obtaining Well Calibrated Probabilities Using Bayesian Binning." AAAI.
     2015.
     """
-    def __init__(self, n_bins=15):
+    def __init__(self, n_bins=15, logits_are_probabilities=False):
         """
         n_bins (int): number of confidence interval bins
         """
@@ -93,9 +98,13 @@ class _ECELoss(nn.Module):
         bin_boundaries = torch.linspace(0, 1, n_bins + 1)
         self.bin_lowers = bin_boundaries[:-1]
         self.bin_uppers = bin_boundaries[1:]
+        self.logits_are_probabilities = logits_are_probabilities
 
     def forward(self, logits, labels):
-        softmaxes = F.softmax(logits, dim=1)
+        if not self.logits_are_probabilities:
+            softmaxes = F.softmax(logits, dim=1)
+        else:
+            softmaxes = logits
         confidences, predictions = torch.max(softmaxes, 1)
         accuracies = predictions.eq(labels)
 
