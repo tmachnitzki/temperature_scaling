@@ -9,7 +9,7 @@ setup(
     author="",
     author_email="",
     license="",
-    packages=[],
+    packages=["temperature_scaling"],
     install_requires=[],
     classifiers=[
         "Development Status :: 1 - Planning",

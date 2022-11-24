@@ -4,7 +4,7 @@ import torch
 import torchvision as tv
 from torch.utils.data.sampler import SubsetRandomSampler
 from models import DenseNet
-from temperature_scaling import ModelWithTemperature
+from temperature_scaling.temperature_scaling import ModelWithTemperature
 
 
 def demo(data, save, depth=40, growth_rate=12, batch_size=256):
